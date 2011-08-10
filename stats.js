@@ -45,7 +45,15 @@ config.configFile(process.argv[2], function (config, oldConfig) {
             timers[key] = [];
           }
           timers[key].push(Number(fields[0] || 0));
-        } else {
+        } else if (fields[1].trim() == "hs") {
+			var val = parseInt(fields[0]);
+			var lowerbound = parseInt(val/10)*10; 
+			key = key+"."+lowerbound+"-"+(lowerbound+9);
+			if (!counters[key]) {
+				counters[key] = 0;
+			}
+			counters[key] += 1;
+		} else {
           if (fields[2] && fields[2].match(/^@([\d\.]+)/)) {
             sampleRate = Number(fields[2].match(/^@([\d\.]+)/)[1]);
           }

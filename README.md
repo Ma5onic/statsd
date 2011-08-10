@@ -40,6 +40,17 @@ Sampling
 
 Tells StatsD that this counter is being sent sampled every 1/10th of the time.
 
+Histogram
+---------
+
+	gorets:1|hs
+
+Tells StatsD that value should go into a bucket split up by 10s.  Example:
+
+gorets:52|hs
+
+Would increment the counter for gorets.50-59
+
 
 Guts
 ----
