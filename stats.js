@@ -17,7 +17,7 @@ config.configFile(process.argv[2], function (config, oldConfig) {
     if (debugInt !== undefined) { clearInterval(debugInt); }
     debugInt = setInterval(function () { 
       sys.log("Counters:\n" + sys.inspect(counters) + "\nTimers:\n" + sys.inspect(timers));
-    }, config.debugInterval || 10000);
+    }, config.debugInterval || 20000);
   }
 
   if (server === undefined) {
@@ -45,15 +45,15 @@ config.configFile(process.argv[2], function (config, oldConfig) {
             timers[key] = [];
           }
           timers[key].push(Number(fields[0] || 0));
-        } else if (fields[1].trim() == "hs") {
-			var val = parseInt(fields[0]);
-			var lowerbound = parseInt(val/10)*10; 
-			key = key+"."+lowerbound+"-"+(lowerbound+9);
-			if (!counters[key]) {
-				counters[key] = 0;
-			}
-			counters[key] += 1;
-		} else {
+		} else if (fields[1].trim() == "hs") {
+ 			var val = parseInt(fields[0]);
+ 			var lowerbound = parseInt(val/10)*10; 
+ 			key = key+"."+lowerbound+"-"+(lowerbound+9);
+ 			if (!counters[key]) {
+ 				counters[key] = 0;
+ 			}
+ 			counters[key] += 1;
+        } else {
           if (fields[2] && fields[2].match(/^@([\d\.]+)/)) {
             sampleRate = Number(fields[2].match(/^@([\d\.]+)/)[1]);
           }
@@ -67,7 +67,7 @@ config.configFile(process.argv[2], function (config, oldConfig) {
 
     server.bind(config.port || 8125);
 
-    var flushInterval = Number(config.flushInterval || 10000);
+    var flushInterval = Number(config.flushInterval || 20000);
 
     flushInt = setInterval(function () {
       var statString = '';
@@ -78,7 +78,6 @@ config.configFile(process.argv[2], function (config, oldConfig) {
       for (key in counters) {
         var value = counters[key] / (flushInterval / 1000);
         var message = 'stats.' + key + ' ' + value + ' ' + ts + "\n";
-        //message += 'stats_counts.' + key + ' ' + counters[key] + ' ' + ts + "\n";
         statString += message;
         counters[key] = 0;
 
@@ -86,8 +85,9 @@ config.configFile(process.argv[2], function (config, oldConfig) {
       }
 
       for (key in timers) {
+
         if (timers[key].length > 0) {
-          var pctThreshold = config.percentThreshold || 90;
+          var pctThreshold = config.percentThreshold || 95;
           var values = timers[key].sort(function (a,b) { return a-b; });
           var count = values.length;
           var min = values[0];
@@ -114,11 +114,11 @@ config.configFile(process.argv[2], function (config, oldConfig) {
           timers[key] = [];
 
           var message = "";
-          message += 'stats.timers.' + key + '.mean ' + mean + ' ' + ts + "\n";
-          message += 'stats.timers.' + key + '.upper ' + max + ' ' + ts + "\n";
-          message += 'stats.timers.' + key + '.upper_' + pctThreshold + ' ' + maxAtThreshold + ' ' + ts + "\n";
-          message += 'stats.timers.' + key + '.lower ' + min + ' ' + ts + "\n";
-          message += 'stats.timers.' + key + '.count ' + count + ' ' + ts + "\n";
+          message += 'stats.' + key + '.mean ' + mean + ' ' + ts + "\n";
+          message += 'stats.' + key + '.upper ' + max + ' ' + ts + "\n";
+          message += 'stats.' + key + '.upper_' + pctThreshold + ' ' + maxAtThreshold + ' ' + ts + "\n";
+          message += 'stats.' + key + '.lower ' + min + ' ' + ts + "\n";
+          message += 'stats.' + key + '.rps ' + count/(flushInterval / 1000) + ' ' + ts + "\n";
           statString += message;
 
           numStats += 1;
