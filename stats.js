@@ -20,8 +20,9 @@ config.configFile(process.argv[2], function (config, oldConfig) {
     }, config.debugInterval || 20000);
   }
 
-  if (server === undefined) {
-    server = dgram.createSocket('udp4', function (msg, rinfo) {
+  var responder;
+  if (config.master) {
+	responder = function(msg, rifno) {
       if (config.dumpMessages) { sys.log(msg.toString()); }
       var bits = msg.toString().split(':');
       var key = bits.shift()
@@ -63,10 +64,7 @@ config.configFile(process.argv[2], function (config, oldConfig) {
           counters[key] += Number(fields[0] || 1) * (1 / sampleRate);
         }
       }
-    });
-
-    server.bind(config.port || 8125);
-
+    };
     var flushInterval = Number(config.flushInterval || 20000);
 
     flushInt = setInterval(function () {
@@ -145,7 +143,62 @@ config.configFile(process.argv[2], function (config, oldConfig) {
       }
 
     }, flushInterval);
-  }
+    // slave based work
+       if (config.slaves) {
+          config.slaves.forEach(function(item) {
+             connectToSlave(item);
+          });
+       }
+	} else {
+      var socket = undefined;
+      var listener = net.createServer(function(incoming) {
+         console.log("Connected to master");
+         socket = incoming;
+         socket.on('close', function() {
+           console.log("Lost connection to master, awaiting reconnection...");
+           socket = undefined;
+         });
+      });
+      console.log("Awaiting connection from master on port " + (config.slavePort || 8127));
+      listener.listen(config.slavePort || 8127);
+      responder = function(msg, rinfo) {
+        console.log(msg.toString());
+        if (socket != undefined) {
+          socket.write(msg.toString());
+        }
+      };
+    }
+	
+
+    server = dgram.createSocket('udp4', responder);
+    server.bind(config.port || 8125);
 
 });
+
+function logger() {
+	console.log("blah");
+}
+
+function connectToSlave(address) {
+    var parts = address.split(":");
+	console.log("conning to " + parts[0] + ":" + parts[1]);
+    var stream = net.createConnection(parts[1], parts[0]);
+    stream.on('connect', function() {
+		console.log("connected to " + parts[0] + ":" + parts[1]);
+    });
+	stream.on('data', function(data) {
+
+		console.log(data.toString());
+	});
+	stream.on('error', function() {
+		// ignore this - the close event will be raised anyway but
+		// if we don't have this event node will die
+	});
+	stream.on('close', function() {
+		console.log("Connection to " + address + " lost, retrying in 1 second");
+		stream.destroy();
+		setTimeout(function() { connectToSlave(address); console.log(address) }, 1000);
+	});
+	console.log("finished" + address);
+}
 
