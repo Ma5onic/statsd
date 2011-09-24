@@ -22,49 +22,7 @@ config.configFile(process.argv[2], function (config, oldConfig) {
 
   var responder;
   if (config.master) {
-	responder = function(msg, rifno) {
-      if (config.dumpMessages) { sys.log(msg.toString()); }
-      var bits = msg.toString().split(':');
-      var key = bits.shift()
-                    .replace(/\s+/g, '_')
-                    .replace(/\//g, '-')
-                    .replace(/[^a-zA-Z_\-0-9\.]/g, '');
-
-      if (bits.length == 0) {
-        bits.push("1");
-      }
-
-      for (var i = 0; i < bits.length; i++) {
-        var sampleRate = 1;
-        var fields = bits[i].split("|");
-        if (fields[1] === undefined) {
-            sys.log('Bad line: ' + fields);
-            continue;
-        }
-        if (fields[1].trim() == "ms") {
-          if (! timers[key]) {
-            timers[key] = [];
-          }
-          timers[key].push(Number(fields[0] || 0));
-		} else if (fields[1].trim() == "hs") {
- 			var val = parseInt(fields[0]);
- 			var lowerbound = parseInt(val/10)*10; 
- 			key = key+"."+lowerbound+"-"+(lowerbound+9);
- 			if (!counters[key]) {
- 				counters[key] = 0;
- 			}
- 			counters[key] += 1;
-        } else {
-          if (fields[2] && fields[2].match(/^@([\d\.]+)/)) {
-            sampleRate = Number(fields[2].match(/^@([\d\.]+)/)[1]);
-          }
-          if (! counters[key]) {
-            counters[key] = 0;
-          }
-          counters[key] += Number(fields[0] || 1) * (1 / sampleRate);
-        }
-      }
-    };
+	responder = masterListener; 
     var flushInterval = Number(config.flushInterval || 20000);
 
     flushInt = setInterval(function () {
@@ -146,7 +104,7 @@ config.configFile(process.argv[2], function (config, oldConfig) {
     // slave based work
        if (config.slaves) {
           config.slaves.forEach(function(item) {
-             connectToSlave(item);
+             connectToSlave(item, config);
           });
        }
 	} else {
@@ -179,7 +137,7 @@ function logger() {
 	console.log("blah");
 }
 
-function connectToSlave(address) {
+function connectToSlave(address, config) {
     var parts = address.split(":");
 	console.log("conning to " + parts[0] + ":" + parts[1]);
     var stream = net.createConnection(parts[1], parts[0]);
@@ -187,8 +145,10 @@ function connectToSlave(address) {
 		console.log("connected to " + parts[0] + ":" + parts[1]);
     });
 	stream.on('data', function(data) {
-
-		console.log(data.toString());
+		if (config.dumpMessages) {
+			console.log("Recieved from slave: " + data.toString());
+		}
+		masterListener(data, null);
 	});
 	stream.on('error', function() {
 		// ignore this - the close event will be raised anyway but
@@ -202,3 +162,46 @@ function connectToSlave(address) {
 	console.log("finished" + address);
 }
 
+function masterListener(msg, rifno) {
+      if (config.dumpMessages) { sys.log(msg.toString()); }
+      var bits = msg.toString().split(':');
+      var key = bits.shift()
+                    .replace(/\s+/g, '_')
+                    .replace(/\//g, '-')
+                    .replace(/[^a-zA-Z_\-0-9\.]/g, '');
+
+      if (bits.length == 0) {
+        bits.push("1");
+      }
+
+      for (var i = 0; i < bits.length; i++) {
+        var sampleRate = 1;
+        var fields = bits[i].split("|");
+        if (fields[1] === undefined) {
+            sys.log('Bad line: ' + fields);
+            continue;
+        }
+        if (fields[1].trim() == "ms") {
+          if (! timers[key]) {
+            timers[key] = [];
+          }
+          timers[key].push(Number(fields[0] || 0));
+		} else if (fields[1].trim() == "hs") {
+ 			var val = parseInt(fields[0]);
+ 			var lowerbound = parseInt(val/10)*10; 
+ 			key = key+"."+lowerbound+"-"+(lowerbound+9);
+ 			if (!counters[key]) {
+ 				counters[key] = 0;
+ 			}
+ 			counters[key] += 1;
+        } else {
+          if (fields[2] && fields[2].match(/^@([\d\.]+)/)) {
+            sampleRate = Number(fields[2].match(/^@([\d\.]+)/)[1]);
+          }
+          if (! counters[key]) {
+            counters[key] = 0;
+          }
+          counters[key] += Number(fields[0] || 1) * (1 / sampleRate);
+        }
+      }
+}
