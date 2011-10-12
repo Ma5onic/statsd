@@ -1,11 +1,13 @@
 var dgram  = require('dgram')
   , sys    = require('sys')
   , net    = require('net')
+  , lines  = require('lines')
   , config = require('./config')
 
 var counters = {};
+var tcpcount = 0;
 var timers = {};
-var debugInt, flushInt, server;
+var debugInt, flushInt, server, tcpserver;
 
 config.configFile(process.argv[2], function (config, oldConfig) {
   if (! config.debug && debugInt) {
@@ -22,7 +24,7 @@ config.configFile(process.argv[2], function (config, oldConfig) {
 
   var responder;
   if (config.master) {
-	responder = masterListener; 
+    responder = masterListener; 
     var flushInterval = Number(config.flushInterval || 20000);
 
     flushInt = setInterval(function () {
@@ -79,7 +81,13 @@ config.configFile(process.argv[2], function (config, oldConfig) {
 
           numStats += 1;
         }
+
       }
+
+      timers = {};
+//console.log(tcpcount + " messages last interval");
+tcpcount = 0;
+      counters = {};
 
       statString += 'statsd.numStats ' + numStats + ' ' + ts + "\n";
       
@@ -107,7 +115,7 @@ config.configFile(process.argv[2], function (config, oldConfig) {
              connectToSlave(item, config);
           });
        }
-	} else {
+    } else {
       var socket = undefined;
       var listener = net.createServer(function(incoming) {
          console.log("Connected to master");
@@ -126,45 +134,55 @@ config.configFile(process.argv[2], function (config, oldConfig) {
         }
       };
     }
-	
-
+    
     server = dgram.createSocket('udp4', responder);
     server.bind(config.port || 8125);
 
-});
+    if(config.master) {
+      tcpserver = net.createServer(function(socket) {
 
-function logger() {
-	console.log("blah");
-}
+        lines(socket);
+    socket.setEncoding('ascii');
+        socket.on('line', function(line) {
+            tcpcount += 1;
+//console.log("Message: |" + line.trim() + "|");
+            masterListener(line.trim(), null);
+        })
+      })
+
+    tcpserver.listen(8125);
+    }
+
+});
 
 function connectToSlave(address, config) {
     var parts = address.split(":");
-	console.log("conning to " + parts[0] + ":" + parts[1]);
+    console.log("Connecting to " + parts[0] + ":" + parts[1]);
     var stream = net.createConnection(parts[1], parts[0]);
     stream.on('connect', function() {
-		console.log("connected to " + parts[0] + ":" + parts[1]);
+        console.log("connected to " + parts[0] + ":" + parts[1]);
     });
-	stream.on('data', function(data) {
-		if (config.dumpMessages) {
-			console.log("Recieved from slave: " + data.toString());
-		}
-		masterListener(data, null);
-	});
-	stream.on('error', function() {
-		// ignore this - the close event will be raised anyway but
-		// if we don't have this event node will die
-	});
-	stream.on('close', function() {
-		console.log("Connection to " + address + " lost, retrying in 1 second");
-		stream.destroy();
-		setTimeout(function() { connectToSlave(address); console.log(address) }, 1000);
-	});
-	console.log("finished" + address);
+    stream.on('data', function(data) {
+        if (config.dumpMessages) {
+            console.log("Recieved from slave: " + data.toString());
+        }
+        masterListener(data, null);
+    });
+    stream.on('error', function() {
+        // ignore this - the close event will be raised anyway but
+        // if we don't have this event node will die
+    });
+    stream.on('close', function() {
+        console.log("Connection to " + address + " lost, retrying in 1 second");
+        stream.destroy();
+        setTimeout(function() { connectToSlave(address); console.log(address) }, 1000);
+    });
+    console.log("finished" + address);
 }
 
 function masterListener(msg, rifno) {
       if (config.dumpMessages) { sys.log(msg.toString()); }
-      var bits = msg.toString().split(':');
+      var bits = msg.toString().replace(/\\n/g,'').split(':');
       var key = bits.shift()
                     .replace(/\s+/g, '_')
                     .replace(/\//g, '-')
@@ -186,14 +204,14 @@ function masterListener(msg, rifno) {
             timers[key] = [];
           }
           timers[key].push(Number(fields[0] || 0));
-		} else if (fields[1].trim() == "hs") {
- 			var val = parseInt(fields[0]);
- 			var lowerbound = parseInt(val/10)*10; 
- 			key = key+"."+lowerbound+"-"+(lowerbound+9);
- 			if (!counters[key]) {
- 				counters[key] = 0;
- 			}
- 			counters[key] += 1;
+        } else if (fields[1].trim() == "hs") {
+            var val = parseInt(fields[0]);
+            var lowerbound = parseInt(val/10)*10; 
+            key = key+"."+lowerbound+"-"+(lowerbound+9);
+            if (!counters[key]) {
+                counters[key] = 0;
+            }
+            counters[key] += 1;
         } else {
           if (fields[2] && fields[2].match(/^@([\d\.]+)/)) {
             sampleRate = Number(fields[2].match(/^@([\d\.]+)/)[1]);
