@@ -1,0 +1,5 @@
+stats.test1.counter.10-19 1 1320681289
+statsd.numStats 1 1320681289
+stats.test1.counter.20-29 1 1320681290
+statsd.numStats 1 1320681290
+statsd.numStats 0 1320681291

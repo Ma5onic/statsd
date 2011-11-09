@@ -1,0 +1,3 @@
+stats.test1.counter 1
+statsd.numStats 1
+statsd.numStats 0

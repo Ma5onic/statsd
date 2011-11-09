@@ -1,0 +1,4 @@
+statsd.numStats 0 1320681301
+stats.test-proxy1.slave2-msg 1 1320681302
+statsd.numStats 1 1320681302
+statsd.numStats 0 1320681303

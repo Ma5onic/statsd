@@ -1,0 +1,5 @@
+stats.test1.counter.10-19 1
+statsd.numStats 1
+stats.test1.counter.20-29 1
+statsd.numStats 1
+statsd.numStats 0

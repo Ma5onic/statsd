@@ -1,0 +1,3 @@
+stats.test1.counter 1 1320681286
+statsd.numStats 1 1320681286
+statsd.numStats 0 1320681287

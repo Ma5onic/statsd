@@ -1,0 +1,5 @@
+stats.test-proxy1.slave-msg 1
+statsd.numStats 1
+stats.test-proxy1.master-msg 1
+statsd.numStats 1
+statsd.numStats 0

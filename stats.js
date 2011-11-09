@@ -109,30 +109,49 @@ tcpcount = 0;
       }
 
     }, flushInterval);
-    // slave based work
        if (config.slaves) {
           config.slaves.forEach(function(item) {
              connectToSlave(item, config);
           });
        }
     } else {
-      var socket = undefined;
-      var listener = net.createServer(function(incoming) {
-         console.log("Connected to master");
-         socket = incoming;
-         socket.on('close', function() {
-           console.log("Lost connection to master, awaiting reconnection...");
-           socket = undefined;
-         });
-      });
-      console.log("Awaiting connection from master on port " + (config.slavePort || 8127));
-      listener.listen(config.slavePort || 8127);
-      responder = function(msg, rinfo) {
-        console.log(msg.toString());
-        if (socket != undefined) {
-          socket.write(msg.toString());
-        }
-      };
+		var socket = undefined;
+		if (config.masterUrl == undefined) {
+			var listener = net.createServer(function(incoming) {
+				console.log("Connected to master");
+				socket = incoming;
+				socket.on('close', function() {
+					console.log("Lost connection to master, awaiting reconnection...");
+					socket = undefined;
+   		      	});
+      		});
+			console.log("Awaiting connection from master on port " + (config.slavePort || 8127));
+			listener.listen(config.slavePort || 8127);
+		} else {
+    		var parts = config.masterUrl.split(":");
+			console.log("Connecting to master at " + config.masterUrl);
+			var master = net.createConnection(parts[1], parts[0]);
+			master.addListener('error', function(connectionException){
+				socket = undefined;
+				if (config.debug) {
+					sys.log(connectionException);
+				}
+			});
+			master.on('connect', function() {
+				socket = master;
+			});
+			master.on('end', function() {
+				socket = undefined;
+			})
+		}
+		responder = function(msg, rinfo) {
+			if (socket != undefined) {
+				if (!/\n$/.test(msg)) {
+					msg = msg+"\n";
+				}
+				socket.write(msg.toString());
+			}
+		};
     }
     
     server = dgram.createSocket('udp4', responder);
@@ -166,6 +185,8 @@ function connectToSlave(address, config) {
         if (config.dumpMessages) {
             console.log("Recieved from slave: " + data.toString());
         }
+
+		// TODO split on newlines and ping across one at once
         masterListener(data, null);
     });
     stream.on('error', function() {
@@ -175,7 +196,7 @@ function connectToSlave(address, config) {
     stream.on('close', function() {
         console.log("Connection to " + address + " lost, retrying in 1 second");
         stream.destroy();
-        setTimeout(function() { connectToSlave(address); console.log(address) }, 1000);
+        setTimeout(function() { connectToSlave(address, config); console.log(address) }, 1000);
     });
     console.log("finished" + address);
 }
